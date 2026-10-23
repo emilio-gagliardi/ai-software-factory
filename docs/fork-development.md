@@ -9,13 +9,13 @@ is not required to edit or test this toolkit.
 - `origin`: https://github.com/emilio-gagliardi/ai-software-factory.git
 - `upstream`: https://github.com/coleam00/ai-software-factory.git
 - `main`: upstream baseline; keep custom commits off this branch.
-- `my-version`: persistent customization branch.
-- `feature/*`: focused work, branched from and merged back into `my-version`.
+- `emilio-alpha`: persistent customization branch.
+- `feature/*`: focused work, branched from and merged back into `emilio-alpha`.
 
 The initial baseline is `9de13f383b579229ffed9113ecdb3fa04dfe492f`.
 Local Git configuration defaults pushes to `origin`, uses fast-forward-only pulls,
 disables automatic rebase, prunes stale fetched branches and enables rerere.
-`main` tracks `upstream/main`; `my-version` tracks `origin/my-version`.
+`main` tracks `upstream/main`; `emilio-alpha` tracks `origin/emilio-alpha`.
 The upstream push URL is `DISABLED` to prevent accidental pushes.
 These settings live in `.git/config`; they must be reapplied in new clones.
 
@@ -24,14 +24,14 @@ These settings live in `.git/config`; they must be reapplied in new clones.
 Start with a clean working tree:
 
 ```bash
-git switch my-version
+git switch emilio-alpha
 git switch -c feature/describe-the-change
 # Edit, review, test, then commit.
 git push -u origin feature/describe-the-change
 ```
 
 When using a pull request, explicitly target `emilio-gagliardi/ai-software-factory`
-and base `my-version`; a fork's suggested PR target may be the original project.
+and base `emilio-alpha`; a fork's suggested PR target may be the original project.
 
 ## Receive maintainer updates
 
@@ -44,11 +44,11 @@ git fetch upstream
 git switch main
 git merge --ff-only upstream/main
 git push origin main
-git switch my-version
+git switch emilio-alpha
 git merge main
 python bin/audit.py
 python -m unittest discover -s bin -p 'test*.py'
-git push origin my-version
+git push origin emilio-alpha
 ```
 
 If a merge conflicts, resolve and test before committing, or run `git merge --abort`
