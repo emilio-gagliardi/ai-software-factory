@@ -65,7 +65,7 @@ python -m unittest discover -s bin -p 'test*.py'
 ```
 
 Live Archon source conformance requires a separately installed pinned Archon source;
-see the test's `FACTORY_INTEGRATION_SOURCE` requirement. Local tests do not establish
+see the test's `FACTORY_ARCHON_CONFORMANCE_SOURCE` requirement. Local tests do not establish
 provider authentication or live workflow readiness.
 
 ## Authentication and runtime
