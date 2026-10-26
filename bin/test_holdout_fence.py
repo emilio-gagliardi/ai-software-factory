@@ -91,6 +91,16 @@ class FenceTests(unittest.TestCase):
         self.assertEqual(self.bash("git diff HEAD~1 HEAD -- src"), 0)
         self.assertEqual(self.bash("git diff"), 0)
 
+    # fork-patch(temp): Codex findings on fork PR #4; drop with the patches once upstream fixes them.
+    def test_fork_patch_exit_code_and_partial_exclusions_do_not_open_the_fence(self) -> None:
+        self.assertEqual(self.bash("git diff --exit-code HEAD~1 HEAD"), 2)
+        self.assertEqual(self.bash("git diff --quiet HEAD~1 HEAD"), 0)
+        self.assertEqual(self.bash("rg -uu -g '!.factory/backup/**' zanzibar ."), 2)
+        self.assertEqual(self.bash("rg -uu -g '!.factory' zanzibar ."), 0)
+        self.assertEqual(self.bash("git grep zanzibar -- . ':!.factory/backup'"), 2)
+        self.assertEqual(self.bash("git grep zanzibar -- . ':!.factory'"), 0)
+        self.assertEqual(self.bash("grep -rn foo --exclude-dir=backup ."), 2)
+
     def test_the_fence_itself_only_changes_by_hand(self) -> None:
         self.assertEqual(self.hook("Edit", {"file_path": str(self.repo / ".claude/settings.json")}), 2)
         self.assertEqual(self.hook("Write", {"file_path": str(self.repo / ".factory/hooks/holdout_fence.py")},

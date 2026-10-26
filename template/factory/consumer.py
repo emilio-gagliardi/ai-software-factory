@@ -40,6 +40,7 @@ def fence_command(mode: str) -> str:
 
 
 def hook_shell() -> str | None:
+    # fork-patch(temp): drop once upstream resolves the hook shell the way Claude Code does.
     # On Windows Claude Code runs hooks in Git Bash (CLAUDE_CODE_GIT_BASH_PATH, else the bash
     # beside git). The first bash on PATH is often System32's WSL launcher, whose python differs.
     if os.name == "nt":

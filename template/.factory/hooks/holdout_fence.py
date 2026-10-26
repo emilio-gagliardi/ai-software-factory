@@ -43,8 +43,9 @@ MUTATES = re.compile(
     r"\bgit\s+(?:checkout|restore|rm|mv|reset|stash)\b|Set-Content|Add-Content|Out-File|"
     r"Remove-Item|Move-Item|Copy-Item|Rename-Item", re.I)
 SEGMENT = re.compile(r"\s*(?:&&|\|\||;|\||\n)\s*")
+# fork-patch(temp): --exit-code removed; it sets the exit status but still prints the patch.
 NO_PATCH = {"--stat", "--name-only", "--name-status", "--numstat", "--shortstat", "--summary",
-            "-s", "--no-patch", "--quiet", "--exit-code", "--raw"}
+            "-s", "--no-patch", "--quiet", "--raw"}
 LOG_PATCH = re.compile(r"^(?:-p|--patch|-u|-U\d*|--unified(?:=\d+)?|--full-diff|-m|--cc|-c)$")
 PROBE_DROP = re.compile(r"^(?:-p|--patch|-u|-U\d*|--unified(?:=\d+)?|--stat(?:=.*)?|--color(?:=.*)?|"
                         r"--format(?:=.*)?|--pretty(?:=.*)?|--oneline|--graph|-w|--word-diff(?:=.*)?)$")
@@ -98,8 +99,12 @@ def tokens(segment: str, posix: bool = True) -> list[str]:
 def excluded(words: list[str]) -> bool:
     """The search excludes .factory (or the holdout folder) itself."""
     text = " ".join(words).replace("\\", "/")
-    return bool(re.search(r"(--exclude-dir[= ]\S*(\.factory|holdout|\.\*))|(:\(exclude\)|:!|:\^)\S*\.factory"
-                          r"|(-g|--glob)[= ]['\"]?!\S*\.factory", text, re.I))
+    # fork-patch(temp): the exclusion must end at .factory or its holdout folder; excluding a
+    # sibling such as .factory/backup used to count as excluding the holdouts.
+    covered = r"(?:\*\*/)?\.factory(?:/holdout)?(?:/\*{0,2})?['\"]?(?=\s|$)"
+    return bool(re.search(rf"--exclude-dir[= ]['\"]?(?:\.factory|holdout|\.\*)['\"]?(?=\s|$)"
+                          rf"|(?::\(exclude\)|:!|:\^)/?{covered}"
+                          rf"|(?:-g|--glob)[= ]['\"]?!{covered}", text, re.I))
 
 
 def grep_paths(args: list[str]) -> tuple[bool, list[str]]:
