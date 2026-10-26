@@ -394,11 +394,17 @@ def linked_archon_id(req: dict) -> str | None:
     return match.group(1) if match else req.get("externalRunId")
 
 
-def correlate(req: dict, rows: list[dict], claimed: set[str]) -> dict | None:
-    """Find the Archon run this Port request launched: same workflow + target, started after the request."""
+def correlate(req: dict, rows: list[dict], claimed: set[str], launched_at: float | None = None) -> dict | None:
+    """Find the Archon run this Port request launched: same workflow + target, started after the request.
+
+    `launched_at` (local epoch seconds) is set when this bridge launched the request itself; the run must
+    then start after that launch, measured on the local clock, so no older run can satisfy the request."""
     props = req.get("properties") or {}
-    # 60s slack for clock skew between Port's createdAt and the local Archon start time.
-    earliest = parse_time(req.get("createdAt")) - timedelta(seconds=60)
+    if launched_at is not None:
+        earliest = datetime.fromtimestamp(launched_at, tz=timezone.utc) - timedelta(seconds=5)
+    else:
+        # 60s slack for clock skew between Port's createdAt and the local Archon start time.
+        earliest = parse_time(req.get("createdAt")) - timedelta(seconds=60)
     for row in sorted(rows, key=lambda r: str(r.get("started_at") or "")):
         inputs = (row.get("metadata") or {}).get("inputs") or {}
         started = parse_time(row.get("started_at"))
@@ -428,6 +434,8 @@ class Bridge:
         self.workflows = allowed_workflows()
         self.children: dict[str, tuple[subprocess.Popen, float]] = {}  # port run id -> (process, launched)
         self.published: dict[str, str] = {}  # archon run id -> lastActivityAt already in Port
+        # ponytail: in-memory; after a bridge restart only active requests' statusLabel links protect old runs.
+        self.owned: set[str] = set()  # archon run ids already tied to a Port request
 
     def launch(self, req: dict):
         props = req["properties"]
@@ -449,8 +457,10 @@ class Bridge:
 
     def handle_requests(self, rows: list[dict]):
         by_id = {row["id"]: row for row in rows}
-        requests = self.port.active_requests()
-        claimed = {a for a in map(linked_archon_id, requests) if a}
+        # The action is shared by every factory; another bridge owns other factories' requests.
+        mine = self.factory["identifier"]
+        requests = [r for r in self.port.active_requests() if (r.get("entity") or {}).get("identifier") == mine]
+        claimed = {a for a in map(linked_archon_id, requests) if a} | self.owned
         for req in sorted(requests, key=lambda r: r.get("createdAt") or ""):
             rid = req["id"]
             archon_id = linked_archon_id(req)
@@ -459,14 +469,15 @@ class Bridge:
                 if row and row.get("status") in TERMINAL:
                     self.finish(req, row)
                 continue
-            row = correlate(req, rows, claimed)
+            child = self.children.get(rid)
+            row = correlate(req, rows, claimed, child[1] if child else None)
             if row:
                 claimed.add(row["id"])
+                self.owned.add(row["id"])
                 self.port.patch_run(rid, externalRunId=row["id"], statusLabel=f"Archon run {row['id']}: {row.get('status')}",
                                     link=f"https://github.com/{self.slug}")
                 self.port.run_log(rid, f"Correlated to Archon run {row['id']}.")
                 continue
-            child = self.children.get(rid)
             if child:
                 proc, launched = child
                 if proc.poll() is not None or time.time() - launched > LAUNCH_GRACE_S:
