@@ -615,6 +615,13 @@ class ConsumerTests(Fixture):
             with self.assertRaisesRegex(ValueError, "validation failed"):
                 consumer.validate(self.settings, self.source, "archon-ship-block")
 
+    def test_fence_runs_in_the_hook_shell_claude_code_uses(self):
+        bash = Path(self.temp.name) / "git-bash.exe"
+        bash.write_text("")
+        with patch.object(consumer.os, "name", "nt"), \
+             patch.dict(os.environ, {"CLAUDE_CODE_GIT_BASH_PATH": str(bash)}):
+            self.assertEqual(consumer.hook_shell(), str(bash))
+
     def test_pack_workflows_validate_from_project_root(self):
         project = Path(self.temp.name) / "project"
         ok = {"results": [{"valid": True}], "summary": {"errors": 0}}

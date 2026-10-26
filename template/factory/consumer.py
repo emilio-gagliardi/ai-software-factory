@@ -39,6 +39,21 @@ def fence_command(mode: str) -> str:
     return f'python "$CLAUDE_PROJECT_DIR/{FENCE_SCRIPT}" {mode}'
 
 
+def hook_shell() -> str | None:
+    # On Windows Claude Code runs hooks in Git Bash (CLAUDE_CODE_GIT_BASH_PATH, else the bash
+    # beside git). The first bash on PATH is often System32's WSL launcher, whose python differs.
+    if os.name == "nt":
+        configured = os.environ.get("CLAUDE_CODE_GIT_BASH_PATH")
+        if configured and Path(configured).is_file():
+            return configured
+        git = shutil.which("git")
+        if git:
+            bash = Path(git).resolve().parent.parent / "bin/bash.exe"
+            if bash.is_file():
+                return str(bash)
+    return shutil.which("bash") or shutil.which("sh")
+
+
 def windowless() -> bool:
     """True under pythonw (the Windows timer): no console to show child output in."""
     return sys.platform == "win32" and sys.stdout is None
@@ -237,7 +252,7 @@ def fence_report(root: Path) -> str:
     # Laps run in fresh checkouts of the pushed branch, so an uncommitted fence protects nothing there.
     uncommitted = [tracked for tracked in (FENCE_SCRIPT, ".claude/settings.json", ".ignore", ".factory/holdout/HOLDOUT.md")
                    if execute(["git", "ls-files", "--error-unmatch", tracked], root).returncode != 0]
-    shell = shutil.which("bash") or shutil.which("sh")
+    shell = hook_shell()
     if shell is None:
         raise ValueError("No bash to run the holdout fence the way Claude Code runs hooks")
     scenarios = str(root / ".factory/holdout/HOLDOUT.md")
