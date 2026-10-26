@@ -70,8 +70,13 @@ export class HerdrProvider implements IAgentProvider {
   ): AsyncGenerator<ProviderChunk> {
     const signal = options?.abortSignal ?? new AbortController().signal;
     const openCalls = new Map<string, string>();
-    const usage: { text?: string; tokens?: { input: number; output: number }; costUsd?: number } =
-      {};
+    const usage: {
+      text?: string;
+      tokens?: { input: number; output: number };
+      costUsd?: number;
+      structuredOutput?: unknown;
+    } = {};
+    const jsonSchema = options?.outputFormat?.schema ?? options?.nodeConfig?.output_format;
     let stopReason: ProviderStopReason | undefined;
     let failure: { class: ProviderFailureClass; evidence: string } | undefined;
     let finished = false;
@@ -93,6 +98,7 @@ export class HerdrProvider implements IAgentProvider {
           ...(typeof options?.systemPrompt === 'string'
             ? { systemPrompt: options.systemPrompt }
             : {}),
+          ...(jsonSchema !== undefined ? { jsonSchema } : {}),
           signal,
         })
         [Symbol.asyncIterator]();
@@ -135,6 +141,7 @@ export class HerdrProvider implements IAgentProvider {
             usage.text = event.text;
             usage.tokens = event.tokens;
             usage.costUsd = event.costUsd;
+            usage.structuredOutput = event.structuredOutput;
             stopReason = event.stopReason;
             completed = true;
             finished = true;
@@ -182,6 +189,7 @@ export class HerdrProvider implements IAgentProvider {
       }
       if (usage.costUsd !== undefined) result.cost = usage.costUsd;
       if (stopReason !== undefined) result.stopReason = stopReason;
+      if (usage.structuredOutput !== undefined) result.structuredOutput = usage.structuredOutput;
     }
     yield result;
     yield { type: 'settled' };

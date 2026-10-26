@@ -51,6 +51,7 @@ export function mapClaudeLine(line: unknown): RunnerEvent[] {
           : undefined,
         costUsd: typeof ev.total_cost_usd === 'number' ? ev.total_cost_usd : undefined,
         stopReason: 'end_turn',
+        ...(ev.structured_output !== undefined ? { structuredOutput: ev.structured_output } : {}),
       },
     ];
   }

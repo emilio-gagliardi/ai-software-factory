@@ -11,7 +11,7 @@ export const descriptor = providerPluginDescriptorSchema.parse({
   protocol: 1,
   id: 'herdr',
   displayName: 'Herdr (Claude Code / Pi in visible panes)',
-  version: '0.1.0',
+  version: '0.1.1',
   capabilities: {
     backgroundWork: 'none',
     sessionResume: false,
@@ -22,7 +22,8 @@ export const descriptor = providerPluginDescriptorSchema.parse({
     plugins: false,
     agents: false,
     toolRestrictions: false,
-    structuredOutput: false,
+    // The CLI's --json-schema validates the final answer; the engine re-validates it.
+    structuredOutput: 'best-effort',
     requiresAllPropertiesRequired: false,
     envInjection: false,
     costControl: false,

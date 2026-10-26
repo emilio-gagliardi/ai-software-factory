@@ -7,9 +7,34 @@
  * Writes <turnDir>/exit.json { code } last. A <turnDir>/cancel file stops the agent.
  */
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
+/** Always leaves exit.json behind, so the provider never waits on a turn that crashed. */
 export async function paneTurn(turnDir: string): Promise<void> {
+  try {
+    await runTurn(turnDir);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.log(`[herdr-turn] crashed: ${message}`);
+    writeFileSync(join(turnDir, 'exit.json'), JSON.stringify({ code: -1, error: message }));
+  }
+}
+
+/**
+ * The real Claude executable. On Windows `claude` is an npm .cmd shim, and Bun refuses to pass
+ * JSON arguments through cmd.exe, so read the .exe path out of the shim. CLAUDE_BIN_PATH overrides.
+ */
+export function claudeBinary(): string {
+  if (process.env.CLAUDE_BIN_PATH) return process.env.CLAUDE_BIN_PATH;
+  const found = Bun.which('claude');
+  if (!found) throw new Error('claude CLI not found on PATH (set CLAUDE_BIN_PATH)');
+  if (!/\.cmd$/i.test(found)) return found;
+  const target = /"%dp0%\\([^"]+\.exe)"/i.exec(readFileSync(found, 'utf-8'));
+  if (!target) throw new Error(`cannot read the claude executable from ${found} (set CLAUDE_BIN_PATH)`);
+  return join(dirname(found), target[1]);
+}
+
+async function runTurn(turnDir: string): Promise<void> {
 const req = JSON.parse(readFileSync(join(turnDir, 'request.json'), 'utf-8'));
 const events = join(turnDir, 'events.jsonl');
 writeFileSync(events, '');
@@ -18,9 +43,10 @@ writeFileSync(events, '');
 const args = ['-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions'];
 if (req.model) args.push('--model', req.model);
 if (req.systemPrompt) args.push('--append-system-prompt', req.systemPrompt);
+if (req.jsonSchema) args.push('--json-schema', JSON.stringify(req.jsonSchema));
 
 console.log(`[herdr-turn] ${turnDir}\n[herdr-turn] claude ${req.model ?? '(default model)'} in ${req.cwd}\n`);
-const child = Bun.spawn(['claude', ...args], {
+const child = Bun.spawn([claudeBinary(), ...args], {
   cwd: req.cwd,
   stdin: Bun.file(join(turnDir, 'prompt.txt')),
   stdout: 'pipe',

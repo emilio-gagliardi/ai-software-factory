@@ -29,6 +29,7 @@ export type RunnerEvent =
       tokens?: { input: number; output: number };
       costUsd?: number;
       stopReason?: ProviderStopReason;
+      structuredOutput?: unknown;
     }
   | { type: 'error'; failureClass: ProviderFailureClass; evidence: string };
 
@@ -37,6 +38,8 @@ export interface TurnRequest {
   cwd: string;
   model?: string;
   systemPrompt?: string;
+  /** JSON Schema the final answer must satisfy (the node's output_format). */
+  jsonSchema?: Record<string, unknown>;
   signal: AbortSignal;
 }
 
@@ -111,7 +114,7 @@ export class HerdrRunner implements TurnRunner {
     const turnDir = join(process.env.ARCHON_HOME ?? join(homedir(), '.archon'), 'herdr', 'turns', `${Date.now()}-${randomUUID().slice(0, 8)}`);
     mkdirSync(turnDir, { recursive: true });
     writeFileSync(join(turnDir, 'prompt.txt'), req.prompt);
-    writeFileSync(join(turnDir, 'request.json'), JSON.stringify({ cwd: req.cwd, model, systemPrompt: req.systemPrompt }));
+    writeFileSync(join(turnDir, 'request.json'), JSON.stringify({ cwd: req.cwd, model, systemPrompt: req.systemPrompt, jsonSchema: req.jsonSchema }));
 
     const command = paneCommand(turnDir);
     const tab = this.herdr(['tab', 'create', '--workspace', factoryWorkspace(this.herdr, req.cwd), '--cwd', req.cwd, '--label', basename(turnDir), '--no-focus']).result;
