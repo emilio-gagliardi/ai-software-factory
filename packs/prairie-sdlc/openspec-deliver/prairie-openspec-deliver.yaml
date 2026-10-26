@@ -2,8 +2,8 @@ name: prairie-openspec-deliver
 description: |
   Deliver one OpenSpec change: gate the proposal (strict change validation and
   the Prairie architecture-contract validator), write a delivery plan from the
-  proposal, then hand the plan to the stock archon-deliver tail, which implements,
-  reviews, opens a draft PR, and flips it ready.
+  proposal, then hand the plan to the stock archon-deliver-block tail, which runs
+  capped rounds of implement, draft PR, review and CI, and marks the PR ready on green.
   Use when: an OpenSpec change under openspec/changes/<change_id> is ready to be
   built and shipped as a pull request.
   NOT for: authoring or validating proposals, archiving a change, or merging.
@@ -60,7 +60,7 @@ nodes:
       required: [report, summary]
 
   - id: deliver
-    include: archon-deliver
+    include: archon-deliver-block
     depends_on: [plan]
     with:
       work: >-
