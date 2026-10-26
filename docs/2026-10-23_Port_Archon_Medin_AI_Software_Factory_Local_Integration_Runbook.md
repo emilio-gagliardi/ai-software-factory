@@ -2,6 +2,7 @@
 ## Exhaustive technical research and Windows-first local-project onboarding runbook
 
 **Research date:** 2026-10-23  
+**Update 2026-10-26 (pin ec3791c6):** `archon-ship`, `archon-triage`, `archon-deliver` and `archon-review` are now `-block` workflows and `archon-lifecycle` is gone; read workflow names below as their `-block` successors, and take current names from the README's workflow table.  
 **Audience:** Python/AI engineers operating a local multi-agent harness (Herdr + Claude Code + Codex + Pi + Hermes) and Cole Medin's `ai-software-factory`.  
 **Primary platforms:** Windows 11 / PowerShell for interactive setup; GitHub; Port SaaS; optional always-on Linux worker.  
 **Deliverable type:** Architecture decision, documented installation, integration design, tests, troubleshooting, hardening, and source index.  

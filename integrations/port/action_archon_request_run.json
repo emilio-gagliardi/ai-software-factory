@@ -12,9 +12,9 @@
         "workflow": {
           "type": "string",
           "title": "Workflow",
-          "description": "archon-triage and archon-investigate are advisory (no code changes); archon-ship builds, reviews and opens a PR.",
-          "enum": ["archon-triage", "archon-investigate", "archon-ship"],
-          "default": "archon-triage"
+          "description": "archon-triage-block and archon-investigate are advisory (no code changes); archon-ship-block triages, builds, reviews and opens a PR.",
+          "enum": ["archon-triage-block", "archon-investigate", "archon-ship-block"],
+          "default": "archon-triage-block"
         },
         "target": {
           "type": "string",

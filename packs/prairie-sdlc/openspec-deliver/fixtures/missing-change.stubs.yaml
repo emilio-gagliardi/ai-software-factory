@@ -1,6 +1,6 @@
 # Dry-run fixture: the change folder does not exist. exec-code is on, so the real
 # gate script decides and refuses before any openspec or validator call. The plan
-# and the archon-deliver tail are never reached.
+# and the archon-deliver-block tail are never reached.
 fixture:
   expect: failed
   fail-node: gate-proposal

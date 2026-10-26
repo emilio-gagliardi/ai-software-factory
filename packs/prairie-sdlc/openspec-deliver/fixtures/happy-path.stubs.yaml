@@ -1,63 +1,54 @@
 # Dry-run fixture: the proposal passes the gate and the plan is written. The gate
-# and plan are stubbed (exec-code is off), so no openspec or validator runs and no
-# model is called. The stock archon-deliver tail is stubbed node by node under its
-# deliver__ namespace, mirroring its own clean fixture.
-fixture:
-  expect: completed
-  inputs:
-    change_id: f99-01-example-change
-  reached: [gate-proposal, plan]
+# and plan are stubbed, so no openspec or validator runs and no model is called.
+# The stock archon-deliver-block tail is stubbed node by node, mirroring its own
+# ready fixture (Archon ec3791c6); its round and outcome scripts run for real
+# (exec-code), as they do there. Nodes outside its rounds loop are namespaced
+# deliver__; the engine addresses the loop group's nodes by their bare ids.
 gate-proposal: '{"change_id":"f99-01-example-change","proposal_dir":"openspec/changes/f99-01-example-change"}'
 plan:
   report: { type: archon_artifact, run_id: "fixture-run", path: "plan.md" }
   summary: "stub: plan written from the proposal"
-deliver__impl__implement:
+deliver__forge: { source: forge }
+implement__implement:
   done: true
   green: true
   red_cause: ""
-  summary: "stub: implemented and green"
-deliver__impl__assert-changed: "3 files changed"
-deliver__gate-green: '{"gate":"green","red_cause":"","stage":"The implementation","summary":""}'
-deliver__pr__pr: { intent: "/fixture/pr-intent.json" }
-deliver__pr__publish: { schemaVersion: 1, repo: { host: "github.com", path: "example/repo" }, number: 2, url: "https://github.com/example/repo/pull/2", head: "fixture-branch", base: "dev", is_draft: true, state: "open", head_repo: { host: "github.com", path: "example/repo" }, head_revision: "fixturehead", base_revision: "fixturebase", maintainer_can_modify: null }
-deliver__review__mode: '{"continuation":false,"head":"fixturehead","cursor":"","risks":"fixture-owned-policy","execution":{"path":"review__mode","invocation":{"loopPath":[]}}}'
-deliver__review__coverage: { full: true }
-deliver__review__scope:
-  docs: false
-  pr: { repo: { host: "github.com", path: "example/repo" }, number: 2 }
-deliver__review__code: "0 findings"
-deliver__review__simplify__simplify: { findings: false }
-deliver__review__seams: "0 findings"
-deliver__shape__simplify: { findings: false }
-deliver__review__tests: "0 findings"
-deliver__review__review-complete: "settled"
-deliver__review__synthesize:
+  summary: "stub: implemented; focused checks pass"
+pr__forge: { source: forge }
+pr__prepare: { repo: { host: "github.com", path: "example/repo" }, head_repo: { host: "github.com", path: "example/repo" }, head: "fixture-branch", base: "dev", existing: null, title: "stub: title", body: { type: archon_artifact, run_id: "fixture-run", path: "pr-body.md" }, description: null, summary: "stub: target recorded" }
+pr__publish: { schemaVersion: 1, repo: { host: "github.com", path: "example/repo" }, number: 1, url: "https://github.com/example/repo/pull/1", head: "fixture-branch", base: "dev", is_draft: true, state: "open", head_repo: { host: "github.com", path: "example/repo" }, head_revision: "fixturehead", base_revision: "fixturebase", maintainer_can_modify: null }
+review__mode: '{"continuation":false,"light":false,"head":"fixturehead","cursor":"","risks":"fixture-owned-policy","execution":{"path":"review__mode","invocation":{"loopPath":[]}},"seams":false,"code":false,"tests":false,"errors":false,"docs":false,"part":null}'
+review__route: { seams: true, code: true, tests: true, errors: false, docs: false, reason: "stub: the change touches a persisted format" }
+review__scope:
+  head_matches: true
+  pr: { repo: { host: "github.com", path: "example/repo" }, number: 1 }
+  report: { type: archon_artifact, run_id: "fixture-run", path: "review/scope.md" }
+review__seams: "0 findings"
+review__code: "0 findings"
+review__tests: "0 findings"
+review__prune-scratch: "prune-scratch: removed 0 scratch worktree(s)"
+review__synthesize:
   ready: true
   action: none
-  findings_summary: "stub: clean on initial review"
+  findings_summary: "stub: none"
   report: { type: archon_artifact, run_id: "fixture-run", path: "review/report.md" }
-deliver__review__publish:
+  discoveries: []
+  contract_left: []
+review__publish:
   ready: true
   action: none
-  findings_summary: "stub: clean on initial review"
+  findings_summary: "stub: none"
   report: { type: archon_artifact, run_id: "fixture-run", path: "review/report.md" }
-deliver__gate-ready: '{"ready":"true"}'
-# ci-probe is read by its bare id (the engine's CI wait resolves it unprefixed); the rest are namespaced.
-ci-probe: '{"state":"concluded","detail":"no checks configured on this repository - nothing to await"}'
-deliver__ci-verdict: '{"state":"concluded","detail":"no checks configured on this repository - nothing to await"}'
-deliver__ci-attention-route: '{"attention":false,"red_cause":""}'
-deliver__flip-ready: { pr_url: "https://github.com/example/repo/pull/2" }
-deliver__outcome: { pr_url: "https://github.com/example/repo/pull/2", summary: "https://github.com/example/repo/pull/2" }
-deliver__review-policy: { risks: "fixture-owned-policy" }
-deliver__classify:
-  tier: full
-  errors: false
-  docs: false
-  reasons:
-    tier: "stub: touches persisted state"
-    errors: "stub: no failure paths"
-    docs: "stub: no doc-facing changes"
-deliver__resolve-scope: '{"errors":"false"}'
-deliver__file-discoveries: '{"issues":[]}'
-deliver__fork: '{"fork":false}'
-deliver__final-gate: '{"validate":false}'
+  discoveries: []
+  contract_left: []
+simplify__simplify: { findings: false }
+simplify__prune-scratch: "prune-scratch: removed 0 scratch worktree(s)"
+threads: { open: 0, summary: "stub: no review thread is unresolved" }
+ci: { state: green, rerun: none, summary: "stub: every check passed; marked ready" }
+deliver__update-pr-body: { changed: false, summary: "stub: the description is still accurate" }
+fixture:
+  expect: completed
+  inputs:
+    change_id: f99-01-example-change
+  reached: [gate-proposal, plan, implement__implement, review__synthesize, ci, round, deliver__update-pr-body, deliver__outcome]
+exec-code: true
