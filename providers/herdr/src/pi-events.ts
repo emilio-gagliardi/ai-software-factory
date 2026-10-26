@@ -14,6 +14,7 @@ export class PiMapper {
   private output = 0;
   private cost = 0;
   private failure?: string;
+  private stopReason?: string;
 
   constructor(private readonly structured = false) {}
 
@@ -25,7 +26,9 @@ export class PiMapper {
       this.input += Number(msg.usage?.input ?? 0);
       this.output += Number(msg.usage?.output ?? 0);
       this.cost += Number(msg.usage?.cost?.total ?? 0);
-      if (msg.stopReason === 'error' || msg.errorMessage) this.failure = String(msg.errorMessage ?? 'pi error');
+      // The latest assistant message is authoritative: a successful retry clears an earlier failure.
+      this.stopReason = msg.stopReason;
+      this.failure = msg.stopReason === 'error' || msg.errorMessage ? String(msg.errorMessage ?? 'pi error') : undefined;
       const text = (msg.content ?? []).filter((p: any) => p.type === 'text').map((p: any) => p.text).join('');
       if (!text) return [];
       this.text = text;
@@ -33,6 +36,10 @@ export class PiMapper {
     }
     if (ev.type === 'message_update' && ev.assistantMessageEvent?.type === 'error') {
       this.failure = String(ev.assistantMessageEvent.error?.message ?? ev.assistantMessageEvent.reason ?? 'pi stream error');
+      return [];
+    }
+    if (ev.type === 'auto_retry_end') {
+      this.failure = ev.success ? undefined : String(ev.finalError ?? this.failure ?? 'pi retries exhausted');
       return [];
     }
     if (ev.type === 'tool_execution_start')
@@ -48,6 +55,9 @@ export class PiMapper {
   private finish(aborted: boolean): RunnerEvent {
     if (aborted || this.failure)
       return { type: 'error', failureClass: classify(this.failure ?? 'aborted'), evidence: this.failure ?? 'pi turn aborted' };
+    // Archon only checks truncation through schema validation, so a cut-off plain-text answer must not pass as done.
+    if (this.stopReason === 'length')
+      return { type: 'error', failureClass: 'unknown', evidence: 'pi answer truncated at the output limit (stopReason length)' };
     const done: RunnerEvent = {
       type: 'done',
       text: this.text,

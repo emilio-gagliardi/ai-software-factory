@@ -61,6 +61,24 @@ test('pi structured output parses the final JSON and fails typed otherwise', () 
   expect(err.map({ type: 'agent_settled', aborted: false })).toEqual([{ type: 'error', failureClass: 'rate_limited', evidence: '429 rate limit' }]);
 });
 
+test('pi recovery after a retried error reports success; truncation fails', () => {
+  const retried = new PiMapper();
+  retried.map({ type: 'message_update', assistantMessageEvent: { type: 'error', error: { message: '503 overloaded' } } });
+  retried.map({ type: 'message_end', message: { role: 'assistant', content: [], stopReason: 'error', errorMessage: '503 overloaded' } });
+  retried.map({ type: 'auto_retry_start' });
+  retried.map(piAssistant('recovered', 2, 2, 0));
+  retried.map({ type: 'auto_retry_end', success: true });
+  expect(retried.map({ type: 'agent_settled', aborted: false })[0]).toMatchObject({ type: 'done', text: 'recovered' });
+
+  const exhausted = new PiMapper();
+  exhausted.map({ type: 'auto_retry_end', success: false, finalError: '429 rate limit' });
+  expect(exhausted.map({ type: 'agent_settled', aborted: false })[0]).toMatchObject({ type: 'error', failureClass: 'rate_limited' });
+
+  const cut = new PiMapper();
+  cut.map({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'half an ans' }], stopReason: 'length', usage: {} } });
+  expect(cut.map({ type: 'agent_settled', aborted: false })[0]).toMatchObject({ type: 'error', failureClass: 'unknown' });
+});
+
 test('parses provider-scoped model refs', () => {
   expect(parseModel()).toEqual({ agent: 'claude' });
   expect(parseModel('opus')).toEqual({ agent: 'claude', model: 'opus' });
