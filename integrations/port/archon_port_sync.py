@@ -61,6 +61,8 @@ BLUEPRINTS = [
                 "baseBranch": {"type": "string", "title": "Integration branch"},
                 "scheduleEnabled": {"type": "boolean", "title": "Scheduler enabled"},
                 "lifecycleOwner": {"type": "string", "title": "SDLC owner"},
+                "skillsRevision": {"type": "string", "title": "Skills revision (engineering-skills)"},
+                "packRevision": {"type": "string", "title": "Workflow pack revision"},
             },
             "required": ["githubUrl"],
         },
@@ -222,6 +224,18 @@ def map_run(row: dict, slug: str, intent: dict, observed_at: str) -> dict:
     }
 
 
+def git_head(path: Path) -> str | None:
+    """Short HEAD of the repository containing `path` (junctions resolved), or None."""
+    try:
+        out = subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], cwd=path.resolve(), capture_output=True,
+                             text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    except OSError:
+        return None
+    if out.returncode != 0:
+        return None
+    return out.stdout.strip() or None
+
+
 def map_factory(slug: str, repo: Path) -> dict:
     pack = json.loads((repo / "factory" / "pack.json").read_text(encoding="utf-8"))
     config = (repo / ".archon" / "config.yaml")
@@ -237,6 +251,9 @@ def map_factory(slug: str, repo: Path) -> dict:
         "baseBranch": base.group(1) if base else None,
         "scheduleEnabled": False,  # ponytail: descriptive only; read `consumer.py schedule status` if this matters
         "lifecycleOwner": "Archon",
+        "skillsRevision": git_head(Path(os.environ.get("SKILLS_REPO", r"D:\workspace\personal\engineering-skills"))),
+        # The pack loads from Archon's global scope, a junction into the repo that owns it.
+        "packRevision": git_head(Path(os.environ.get("ARCHON_HOME") or Path.home() / ".archon") / "workflows"),
     }
     return {
         "identifier": entity_id(slug, "factory"),
