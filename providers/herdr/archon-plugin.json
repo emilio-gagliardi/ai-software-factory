@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "kind": "provider",
+  "name": "provider-herdr",
+  "description": "Runs Claude Code or Pi turns in visible Herdr panes as an external Archon provider.",
+  "executable": "archon-provider-herdr"
+}

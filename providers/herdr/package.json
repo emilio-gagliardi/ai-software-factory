@@ -1,0 +1,20 @@
+{
+  "name": "archon-provider-herdr",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "External Archon provider plugin that runs Claude Code or Pi in visible Herdr panes.",
+  "scripts": {
+    "start": "bun src/main.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@archon/provider-contract": "file:C:/Users/emili/.cache/factory/archon/120f3e040f45c0ad88249601d846e414f4bf438b/packages/provider-contract",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.0",
+    "typescript": "^5.9.3"
+  }
+}

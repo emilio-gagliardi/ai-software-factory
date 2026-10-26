@@ -16,6 +16,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MANIFEST = json.loads((HERE / "pack.json").read_text(encoding="utf-8"))
 SETTINGS = ".factory/consumer.json"
+PACK_PREFIX = "prairie-"
+PACK_DIR = "prairie-sdlc"
 ENTRY = "packages/cli/src/cli.ts"
 SCHEDULE = ".factory/schedule.json"
 TRIGGER = ".factory/trigger.json"
@@ -184,7 +186,12 @@ def discover(settings: dict, source: Path) -> dict[str, Path]:
     if not isinstance(rows, list):
         raise ValueError("Native workflow list returned no workflows array")
     names = {row["name"] for row in rows}
-    return {name: path for name, path in local.items() if name in names}
+    found = {name: path for name, path in local.items() if name in names}
+    # Owner-authored workflows load from Archon's global scope (~/.archon/workflows) so they
+    # can include pinned SDLC stages. The prefix keeps them from shadowing a pinned name.
+    pack = Path(os.environ.get("ARCHON_HOME") or Path.home() / ".archon") / "workflows" / PACK_DIR
+    found.update({name: pack for name in names if name.startswith(PACK_PREFIX) and name not in found})
+    return found
 
 
 def validate(settings: dict, source: Path, name: str) -> None:

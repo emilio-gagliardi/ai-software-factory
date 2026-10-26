@@ -1,0 +1,44 @@
+{
+  "identifier": "archon_request_run",
+  "title": "Run Archon workflow",
+  "icon": "Workflow",
+  "description": "Ask the local factory bridge (archon_port_sync.py --serve) to run an Archon workflow for this repository. Archon stays authoritative; this run closes when the Archon run ends.",
+  "trigger": {
+    "type": "self-service",
+    "operation": "DAY-2",
+    "blueprintIdentifier": "archonFactory",
+    "userInputs": {
+      "properties": {
+        "workflow": {
+          "type": "string",
+          "title": "Workflow",
+          "description": "archon-triage and archon-investigate are advisory (no code changes); archon-ship builds, reviews and opens a PR.",
+          "enum": ["archon-triage", "archon-investigate", "archon-ship"],
+          "default": "archon-triage"
+        },
+        "target": {
+          "type": "string",
+          "format": "url",
+          "title": "GitHub issue",
+          "description": "Issue URL in this factory's repository, e.g. https://github.com/OWNER/REPO/issues/123"
+        }
+      },
+      "required": ["workflow", "target"],
+      "order": ["workflow", "target"]
+    }
+  },
+  "invocationMethod": {
+    "type": "WEBHOOK",
+    "agent": true,
+    "url": "http://127.0.0.1/archon-bridge",
+    "method": "POST",
+    "synchronized": false,
+    "body": {
+      "run_id": "{{ .run.id }}",
+      "workflow": "{{ .inputs.workflow }}",
+      "target": "{{ .inputs.target }}",
+      "factory": "{{ .entity.identifier }}"
+    }
+  },
+  "requiredApproval": false
+}
