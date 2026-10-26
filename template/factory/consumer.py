@@ -22,8 +22,21 @@ ENTRY = "packages/cli/src/cli.ts"
 SCHEDULE = ".factory/schedule.json"
 TRIGGER = ".factory/trigger.json"
 PAUSE = ".factory/PAUSE"
-# The shared workflows that carry a merge gate and accept a declared required-check policy.
-MERGING_WORKFLOWS = {"archon-lifecycle", "archon-merge-queue"}
+# The shared workflows that carry a merge gate, and the merge policy keys each one accepts.
+MERGING_WORKFLOWS = {"archon-merge-queue": ("required_checks", "protected_paths"),
+                     "archon-loop": ("protected_paths",)}
+# The holdout fence: a Claude Code hook registered in the project's own settings, so every
+# lap's checkout carries it. Only the holdout subagents may read .factory/holdout/.
+FENCE_SCRIPT = ".factory/hooks/holdout_fence.py"
+FENCE_HOOKS = {"PreToolUse": "pre", "PostToolUse": "post"}
+FENCE_MATCHERS = {
+    "PreToolUse": "Bash|PowerShell|Read|Grep|Glob|Edit|Write|MultiEdit|NotebookEdit|NotebookRead|Agent|Task",
+    "PostToolUse": "Bash|PowerShell|Read|Grep|Glob|Agent|Task"}
+FENCE_IGNORE = ".factory/holdout/"
+
+
+def fence_command(mode: str) -> str:
+    return f'python "$CLAUDE_PROJECT_DIR/{FENCE_SCRIPT}" {mode}'
 
 
 def windowless() -> bool:
@@ -194,10 +207,10 @@ def discover(settings: dict, source: Path) -> dict[str, Path]:
     return found
 
 
-def validate(settings: dict, source: Path, name: str, root: Path) -> None:
+def validate(settings: dict, source: Path, name: str, root: Path | None = None) -> None:
     # Pack workflows resolve tiers (and so node providers and skills:) from the project's
     # .archon/config.yaml; the pinned root has no tiers and would validate them as Codex.
-    cwd = root if name.startswith(PACK_PREFIX) else source
+    cwd = root if root is not None and name.startswith(PACK_PREFIX) else source
     data = native_json(settings, source, ["validate", "workflows", name], cwd)
     results = data.get("results", [])
     if (not results or any(row.get("valid") is not True for row in results)
@@ -205,7 +218,47 @@ def validate(settings: dict, source: Path, name: str, root: Path) -> None:
         raise ValueError(f"Workflow/command validation failed for {name}: {data}")
 
 
-def doctor(settings: dict, root: Path) -> dict:
+def fence_report(root: Path) -> str:
+    """Prove the holdout fence holds in this checkout, by running the registered hook itself."""
+    if not (root / ".factory/holdout/HOLDOUT.md").exists():
+        return "no holdout scenarios"
+    try:
+        settings = json.loads((root / ".claude/settings.json").read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        settings = {}
+    registered = {hook.get("command") for entries in settings.get("hooks", {}).values()
+                  for entry in entries for hook in entry.get("hooks", [])}
+    missing = [event for event, mode in FENCE_HOOKS.items() if fence_command(mode) not in registered]
+    if missing:
+        raise ValueError(f"Holdout fence not registered in .claude/settings.json for {', '.join(missing)}; rerun factory init")
+    ignore = root / ".ignore"
+    if not ignore.exists() or FENCE_IGNORE not in ignore.read_text(encoding="utf-8").splitlines():
+        raise ValueError(f".ignore does not list {FENCE_IGNORE}; rerun factory init")
+    # Laps run in fresh checkouts of the pushed branch, so an uncommitted fence protects nothing there.
+    uncommitted = [tracked for tracked in (FENCE_SCRIPT, ".claude/settings.json", ".ignore", ".factory/holdout/HOLDOUT.md")
+                   if execute(["git", "ls-files", "--error-unmatch", tracked], root).returncode != 0]
+    shell = shutil.which("bash") or shutil.which("sh")
+    if shell is None:
+        raise ValueError("No bash to run the holdout fence the way Claude Code runs hooks")
+    scenarios = str(root / ".factory/holdout/HOLDOUT.md")
+    cases = [("a builder reading the scenarios", {"file_path": scenarios}, None, 2),
+             ("the verifier reading the scenarios", {"file_path": scenarios}, "holdout-verifier", 0),
+             ("a builder reading a source file", {"file_path": str(root / "README.md")}, None, 0)]
+    for name, tool_input, agent, expected in cases:
+        event = {"tool_name": "Read", "tool_input": tool_input, "cwd": str(root),
+                 **({"agent_type": agent} if agent else {})}
+        result = subprocess.run([shell, "-c", fence_command("pre")], input=json.dumps(event), text=True,
+                                capture_output=True, cwd=root, timeout=60,
+                                env={**os.environ, "CLAUDE_PROJECT_DIR": str(root)})
+        if result.returncode != expected:
+            raise ValueError(f"Holdout fence is open: {name} exited {result.returncode}, expected {expected}. "
+                             f"{result.stderr.strip()[:300]} (check that `python` runs Python 3 in bash)")
+    if uncommitted:
+        return "holds here, but laps will not have it until these are committed and pushed: " + ", ".join(uncommitted)
+    return "holds"
+
+
+def doctor(settings: dict, root: Path | None = None) -> dict:
     source = verify_source(settings)
     # Global flags such as --json are documented once, in the top-level workflow
     # help, and not repeated under every subcommand (`workflow status --help` lists
@@ -225,11 +278,8 @@ def doctor(settings: dict, root: Path) -> dict:
         validate(settings, source, name, root)
     return {"source": str(source), "revision": settings["revision"],
             "workflows": sorted(discovered), "automation": "supervised integration",
+            **({"holdout_fence": fence_report(root)} if root is not None else {}),
             "provider_configuration": "native configuration preserved; authentication not live-tested"}
-
-
-# Merge policy keys a project declares once in harness/harness.config.json.
-MERGE_POLICY_KEYS = ("required_checks", "protected_paths")
 
 
 def harness_inputs(root: Path, name: str) -> dict:
@@ -245,7 +295,7 @@ def harness_inputs(root: Path, name: str) -> dict:
         return {}
     if not isinstance(config, dict):
         return {}
-    return {key: config[key] for key in MERGE_POLICY_KEYS
+    return {key: config[key] for key in MERGING_WORKFLOWS[name]
             if isinstance(config.get(key), str) and config[key].strip()}
 
 
@@ -402,7 +452,7 @@ def trigger_config(root: Path, settings: dict, source: Path, interval: int) -> d
     the durable queue and overlap; this only names what to start."""
     schedule_file = shared_root(root) / SCHEDULE
     schedule_data = json.loads(schedule_file.read_text(encoding="utf-8"))
-    workflow = schedule_data.get("workflow", "archon-lifecycle")
+    workflow = schedule_data.get("workflow", "archon-loop")
     inputs = schedule_data.get("inputs")
     if not isinstance(workflow, str) or not isinstance(inputs, dict):
         raise ValueError("schedule.json requires a shared workflow and inputs object")
@@ -578,6 +628,37 @@ def sweep_stuck(root: Path, settings: dict, source: Path, runs: list[dict], writ
     return swept
 
 
+# A running lap writes its log at least every half hour (measured 2026-10-25 over 150 runs:
+# the longest healthy silence was 29.5 min). One silent for an hour has died without ending:
+# seen live, a lap whose review step crashed held the only slot for five hours.
+SILENT_AFTER_SECONDS = 3600
+
+
+def sweep_silent(root: Path, settings: dict, source: Path, runs: list[dict], write) -> set[str]:
+    """Abandon running runs whose log has been silent for SILENT_AFTER_SECONDS. Abandoning
+    frees the slot and removes the worktree but keeps the run's branch, so committed work
+    survives for the next lap; uncommitted changes do not."""
+    swept = set()
+    for run in runs:
+        if run.get("status") != "running" or not isinstance(run.get("id"), str):
+            continue
+        logs = list((archon_home() / "workspaces").glob(f"*/*/logs/{run['id']}.jsonl"))
+        try:
+            newest = max(log.stat().st_mtime for log in logs) if logs else None
+        except OSError:
+            continue
+        if newest is None or time.time() - newest < SILENT_AFTER_SECONDS:
+            continue
+        result = execute([*cli(settings, source), "workflow", "abandon", run["id"], "--cwd", str(root)], root)
+        if result.returncode == 0:
+            swept.add(run["id"])
+            write(f"Abandoned run {run['id']}: its log has been silent for "
+                  f"{int((time.time() - newest) // 60)} min\n")
+        else:
+            write(f"Could not abandon silent run {run['id']}: {(result.stderr or result.stdout)[-300:]}\n")
+    return swept
+
+
 def tick_state(root: Path, **updates) -> dict:
     """The tick's small memory between runs (.factory/gate.json), updated in place."""
     path = shared_root(root) / ".factory/gate.json"
@@ -647,7 +728,7 @@ def launch_decision(root: Path, settings: dict, source: Path, write) -> bool:
     try:
         listed = native_json(settings, source, ["workflow", "runs", "--limit", "100"], root)
         runs = [run for run in listed.get("runs", []) if run.get("workflow_name") == workflow]
-        swept = sweep_stuck(root, settings, source, runs, write)
+        swept = sweep_stuck(root, settings, source, runs, write) | sweep_silent(root, settings, source, runs, write)
         ended = [run["id"] for run in runs if run.get("status") in ENDED]
         active = {run["id"] for run in runs if run.get("status") in ACTIVE} - swept
         result = execute([settings.get("bun", "bun"), str(script)], root, timeout=180, env={
@@ -674,8 +755,12 @@ def launch_decision(root: Path, settings: dict, source: Path, write) -> bool:
     # another lap would see the same and pick nothing too, so wait for the board to change
     # (seen live: items the gate counts as workable that pick stays clear of, because they
     # touch what a live claim is changing).
+    # `updated` (the newest change to any open item) makes an answer count as a change: an
+    # owner decision that lifts a park leaves the same workable items and claims as before
+    # the park (seen live: the factory idled 40 minutes after the owner unblocked an item).
     signature = json.dumps([sorted(f"{item.get('kind')}:{item.get('number')}" for item in workable),
-                            sorted(claim["run"] for claim in board.get("claims", []))])
+                            sorted(claim["run"] for claim in board.get("claims", [])),
+                            str(board.get("updated", ""))])
     # Archon skips a start when every slot is busy; say so instead of recording a launch.
     if isinstance(capacity, int) and len(active) >= capacity:
         write(f"No launch: all {capacity} slot(s) busy; workable {names}.\n")
