@@ -26,13 +26,13 @@ export class PiMapper {
       this.input += Number(msg.usage?.input ?? 0);
       this.output += Number(msg.usage?.output ?? 0);
       this.cost += Number(msg.usage?.cost?.total ?? 0);
-      // The latest assistant message is authoritative: a successful retry clears an earlier failure.
+      // The latest assistant message is authoritative for the outcome AND the answer: a successful
+      // retry clears an earlier failure, and an empty final message must not reuse earlier text.
       this.stopReason = msg.stopReason;
       this.failure = msg.stopReason === 'error' || msg.errorMessage ? String(msg.errorMessage ?? 'pi error') : undefined;
       const text = (msg.content ?? []).filter((p: any) => p.type === 'text').map((p: any) => p.text).join('');
-      if (!text) return [];
       this.text = text;
-      return [{ type: 'text', text }];
+      return text ? [{ type: 'text', text }] : [];
     }
     if (ev.type === 'message_update' && ev.assistantMessageEvent?.type === 'error') {
       this.failure = String(ev.assistantMessageEvent.error?.message ?? ev.assistantMessageEvent.reason ?? 'pi stream error');

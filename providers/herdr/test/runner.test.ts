@@ -56,6 +56,11 @@ test('pi structured output parses the final JSON and fails typed otherwise', () 
   const bad = new PiMapper(true);
   bad.map(piAssistant('no json here', 1, 1, 0));
   expect(bad.map({ type: 'agent_settled', aborted: false })[0]).toMatchObject({ type: 'error', failureClass: 'unknown' });
+  // An earlier JSON-bearing message must not stand in for an empty final answer.
+  const stale = new PiMapper(true);
+  stale.map(piAssistant('{"status":"ok","n":7}', 1, 1, 0));
+  stale.map(piAssistant('', 1, 0, 0));
+  expect(stale.map({ type: 'agent_settled', aborted: false })[0]).toMatchObject({ type: 'error', failureClass: 'unknown' });
   const err = new PiMapper();
   err.map({ type: 'message_update', assistantMessageEvent: { type: 'error', error: { message: '429 rate limit' } } });
   expect(err.map({ type: 'agent_settled', aborted: false })).toEqual([{ type: 'error', failureClass: 'rate_limited', evidence: '429 rate limit' }]);
