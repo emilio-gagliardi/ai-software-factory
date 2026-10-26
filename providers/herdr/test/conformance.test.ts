@@ -13,6 +13,23 @@ async function collect(stream: AsyncIterable<unknown>): Promise<ProviderChunk[]>
   return out;
 }
 
+test('a finished turn closes the runner so its cleanup (tab close) runs', async () => {
+  let cleaned = 0;
+  const runner = {
+    async *run() {
+      try {
+        yield { type: 'done' as const, text: 'ok', stopReason: 'end_turn' as const };
+        yield { type: 'text' as const, text: 'never pulled' };
+      } finally {
+        cleaned++;
+      }
+    },
+  };
+  const chunks = await collect(new HerdrProvider(runner).sendQuery('hello', cwd));
+  expect(chunks.map(chunk => chunk.type)).toEqual(['result', 'settled']);
+  expect(cleaned).toBe(1);
+});
+
 test('in-process fake provider conforms to the provider contract', async () => {
   const provider = new HerdrProvider(new FakeRunner());
   const failures = await runProviderConformance({
