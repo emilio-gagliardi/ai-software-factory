@@ -3,6 +3,7 @@ import { mkdtempSync, writeFileSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mapClaudeLine } from '../src/claude-events.ts';
+import { PiMapper } from '../src/pi-events.ts';
 import { parseModel, tailLines } from '../src/runner.ts';
 
 test('maps claude stream-json lines to runner events', () => {
@@ -24,6 +25,40 @@ test('maps claude stream-json lines to runner events', () => {
   ).toEqual([{ type: 'done', text: 'done', tokens: { input: 5, output: 7 }, costUsd: 0.01, stopReason: 'end_turn' }]);
   const [err] = mapClaudeLine({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'API Error: 429 rate limit' });
   expect(err).toEqual({ type: 'error', failureClass: 'rate_limited', evidence: 'API Error: 429 rate limit' });
+});
+
+// Record shapes copied from a real `pi --mode json` tool turn (trimmed).
+const piAssistant = (text: string, input: number, output: number, cost: number) => ({
+  type: 'message_end',
+  message: { role: 'assistant', content: text ? [{ type: 'text', text }] : [], stopReason: 'stop', usage: { input, output, cost: { total: cost } } },
+});
+
+test('maps pi json records, summing usage across assistant messages', () => {
+  const pi = new PiMapper();
+  expect(pi.map({ type: 'session', cwd: 'x' })).toEqual([]);
+  expect(pi.map(piAssistant('', 10, 2, 0.001))).toEqual([]);
+  expect(pi.map({ type: 'tool_execution_start', toolCallId: 'c1', toolName: 'read', args: { path: 'a' } })).toEqual([
+    { type: 'tool_call', id: 'c1', name: 'read', input: { path: 'a' } },
+  ]);
+  expect(pi.map({ type: 'tool_execution_end', toolCallId: 'c1', result: { content: [{ type: 'text', text: 'ok' }] }, isError: false })).toEqual([
+    { type: 'tool_result', id: 'c1', status: 'completed', output: 'ok' },
+  ]);
+  expect(pi.map(piAssistant('pi-tool-ok', 5, 3, 0.002))).toEqual([{ type: 'text', text: 'pi-tool-ok' }]);
+  expect(pi.map({ type: 'agent_settled', aborted: false })).toEqual([
+    { type: 'done', text: 'pi-tool-ok', tokens: { input: 15, output: 5 }, costUsd: 0.003, stopReason: 'end_turn' },
+  ]);
+});
+
+test('pi structured output parses the final JSON and fails typed otherwise', () => {
+  const ok = new PiMapper(true);
+  ok.map(piAssistant('```json\n{"status":"ok","n":7}\n```', 1, 1, 0));
+  expect(ok.map({ type: 'agent_settled', aborted: false })[0]).toMatchObject({ type: 'done', structuredOutput: { status: 'ok', n: 7 } });
+  const bad = new PiMapper(true);
+  bad.map(piAssistant('no json here', 1, 1, 0));
+  expect(bad.map({ type: 'agent_settled', aborted: false })[0]).toMatchObject({ type: 'error', failureClass: 'unknown' });
+  const err = new PiMapper();
+  err.map({ type: 'message_update', assistantMessageEvent: { type: 'error', error: { message: '429 rate limit' } } });
+  expect(err.map({ type: 'agent_settled', aborted: false })).toEqual([{ type: 'error', failureClass: 'rate_limited', evidence: '429 rate limit' }]);
 });
 
 test('parses provider-scoped model refs', () => {
