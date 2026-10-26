@@ -1,0 +1,70 @@
+name: prairie-openspec-deliver
+description: |
+  Deliver one OpenSpec change: gate the proposal (strict change validation and
+  the Prairie architecture-contract validator), write a delivery plan from the
+  proposal, then hand the plan to the stock archon-deliver tail, which implements,
+  reviews, opens a draft PR, and flips it ready.
+  Use when: an OpenSpec change under openspec/changes/<change_id> is ready to be
+  built and shipped as a pull request.
+  NOT for: authoring or validating proposals, archiving a change, or merging.
+
+inputs:
+  change_id:
+    default: ""
+    description: >-
+      Required. The OpenSpec change id, the directory name under
+      openspec/changes/ (e.g. f99-01-example-change). An empty value fails the gate.
+  target_repo_note:
+    default: ""
+    description: >-
+      Optional free-text note about the target repository, passed to the plan.
+
+nodes:
+  - id: gate-proposal
+    script: gate-proposal
+    runtime: bun
+    output_type: openspec-gate
+    output_format:
+      type: object
+      properties:
+        change_id: { type: string }
+        proposal_dir: { type: string }
+      required: [change_id, proposal_dir]
+    with:
+      change_id: "$INPUTS.change_id"
+
+  - id: plan
+    command: plan-from-proposal
+    # `large` must resolve to a skills-capable provider (claude or herdr) in the target repo's
+    # tiers; validator.ts takes the provider from the tier, not from a node-level provider.
+    model: large
+    skills: [openspec-prairieapplied]
+    mutates_checkout: false
+    output_type: delivery-plan
+    depends_on: [gate-proposal]
+    with:
+      change_id: "$gate-proposal.output.change_id"
+      proposal_dir: "$gate-proposal.output.proposal_dir"
+      target_repo_note: "$INPUTS.target_repo_note"
+    output_format:
+      type: object
+      properties:
+        report:
+          type: object
+          properties:
+            type: { type: string, enum: [archon_artifact] }
+            run_id: { type: string }
+            path: { type: string, enum: [plan.md] }
+          required: [type, run_id, path]
+        summary: { type: string }
+      required: [report, summary]
+
+  - id: deliver
+    include: archon-deliver
+    depends_on: [plan]
+    with:
+      work: >-
+        Deliver the OpenSpec change $gate-proposal.output.change_id under
+        $gate-proposal.output.proposal_dir. The accepted delivery plan is at
+        $ARTIFACTS_DIR/plan.md. Read it in full before editing and keep the
+        implementation within its scope. Do not archive the change and do not merge.

@@ -16,6 +16,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 MANIFEST = json.loads((HERE / "pack.json").read_text(encoding="utf-8"))
 SETTINGS = ".factory/consumer.json"
+PACK_PREFIX = "prairie-"
+PACK_DIR = "prairie-sdlc"
 ENTRY = "packages/cli/src/cli.ts"
 SCHEDULE = ".factory/schedule.json"
 TRIGGER = ".factory/trigger.json"
@@ -184,18 +186,26 @@ def discover(settings: dict, source: Path) -> dict[str, Path]:
     if not isinstance(rows, list):
         raise ValueError("Native workflow list returned no workflows array")
     names = {row["name"] for row in rows}
-    return {name: path for name, path in local.items() if name in names}
+    found = {name: path for name, path in local.items() if name in names}
+    # Owner-authored workflows load from Archon's global scope (~/.archon/workflows) so they
+    # can include pinned SDLC stages. The prefix keeps them from shadowing a pinned name.
+    pack = Path(os.environ.get("ARCHON_HOME") or Path.home() / ".archon") / "workflows" / PACK_DIR
+    found.update({name: pack for name in names if name.startswith(PACK_PREFIX) and name not in found})
+    return found
 
 
-def validate(settings: dict, source: Path, name: str) -> None:
-    data = native_json(settings, source, ["validate", "workflows", name], source)
+def validate(settings: dict, source: Path, name: str, root: Path) -> None:
+    # Pack workflows resolve tiers (and so node providers and skills:) from the project's
+    # .archon/config.yaml; the pinned root has no tiers and would validate them as Codex.
+    cwd = root if name.startswith(PACK_PREFIX) else source
+    data = native_json(settings, source, ["validate", "workflows", name], cwd)
     results = data.get("results", [])
     if (not results or any(row.get("valid") is not True for row in results)
             or data.get("summary", {}).get("errors", 0)):
         raise ValueError(f"Workflow/command validation failed for {name}: {data}")
 
 
-def doctor(settings: dict) -> dict:
+def doctor(settings: dict, root: Path) -> dict:
     source = verify_source(settings)
     # Global flags such as --json are documented once, in the top-level workflow
     # help, and not repeated under every subcommand (`workflow status --help` lists
@@ -212,7 +222,7 @@ def doctor(settings: dict) -> dict:
     if missing:
         raise ValueError("Incomplete integration source; missing shared workflows: " + ", ".join(missing))
     for name in discovered:
-        validate(settings, source, name)
+        validate(settings, source, name, root)
     return {"source": str(source), "revision": settings["revision"],
             "workflows": sorted(discovered), "automation": "supervised integration",
             "provider_configuration": "native configuration preserved; authentication not live-tested"}
@@ -317,7 +327,7 @@ def invoke(root: Path, action: str, args: list[str]) -> int:
     settings = read_settings(root)
     source = verify_source(settings)
     if action == "doctor":
-        print(json.dumps(doctor(settings), indent=2))
+        print(json.dumps(doctor(settings, root), indent=2))
         return 0
     if action == "list":
         print(json.dumps({"source": str(source), "revision": settings["revision"],
@@ -332,8 +342,8 @@ def invoke(root: Path, action: str, args: list[str]) -> int:
         name = args[0]
         if name not in discover(settings, source):
             raise ValueError(f"Shared workflow '{name}' is absent from the pinned SDLC source; no fallback")
-        validate(settings, source, name)
-        options = args[:args.index("--")] if "--" in args else args
+        validate(settings, source, name, root)
+        options =args[:args.index("--")] if "--" in args else args
         resuming = any(arg.split("=", 1)[0] == "--resume" for arg in options)
         if not resuming:
             native += ["--workflow-source", str(source)]
