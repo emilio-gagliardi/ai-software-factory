@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { mapClaudeLine } from './claude-events.ts';
+import { PiMapper } from './pi-events.ts';
 
 /** A JSON value, as the provider contract's tool-call input requires. */
 export type JsonValue = z.infer<ReturnType<typeof z.json>>;
@@ -97,7 +98,8 @@ export class HerdrRunnerError extends Error {
 }
 
 /**
- * Runs each turn as `claude -p --output-format stream-json` in its own tab of a Herdr
+ * Runs each turn as `claude -p --output-format stream-json` (or `pi --mode json` for a `pi/...`
+ * model ref) in its own tab of a Herdr
  * workspace labelled `Factory`, so the turn is watchable live. The pane writes raw events to
  * a turn directory; this runner tails that file. Herdr is the viewing surface, the file is
  * the data channel (Herdr's own read API is text-only).
@@ -109,12 +111,14 @@ export class HerdrRunner implements TurnRunner {
     if (process.env.HERDR_ENV !== '1')
       throw new HerdrRunnerError('misconfigured', 'not running inside a Herdr terminal (HERDR_ENV!=1): launch the factory from a Herdr pane');
     const { agent, model } = parseModel(req.model);
-    if (agent !== 'claude') throw new HerdrRunnerError('misconfigured', `herdr agent '${agent}' not supported yet (claude only)`);
+    if (agent !== 'claude' && agent !== 'pi') throw new HerdrRunnerError('misconfigured', `herdr agent '${agent}' is not supported (claude or pi)`);
+    const pi = agent === 'pi' ? new PiMapper(Boolean(req.jsonSchema)) : undefined;
+    const mapLine = (line: unknown) => (pi ? pi.map(line) : mapClaudeLine(line));
 
     const turnDir = join(process.env.ARCHON_HOME ?? join(homedir(), '.archon'), 'herdr', 'turns', `${Date.now()}-${randomUUID().slice(0, 8)}`);
     mkdirSync(turnDir, { recursive: true });
     writeFileSync(join(turnDir, 'prompt.txt'), req.prompt);
-    writeFileSync(join(turnDir, 'request.json'), JSON.stringify({ cwd: req.cwd, model, systemPrompt: req.systemPrompt, jsonSchema: req.jsonSchema }));
+    writeFileSync(join(turnDir, 'request.json'), JSON.stringify({ agent, cwd: req.cwd, model, systemPrompt: req.systemPrompt, jsonSchema: req.jsonSchema }));
 
     const command = paneCommand(turnDir);
     const tab = this.herdr(['tab', 'create', '--workspace', factoryWorkspace(this.herdr, req.cwd), '--cwd', req.cwd, '--label', basename(turnDir), '--no-focus']).result;
@@ -126,7 +130,7 @@ export class HerdrRunner implements TurnRunner {
       for await (const line of tailLines(join(turnDir, 'events.jsonl'), join(turnDir, 'exit.json'), req.signal)) {
         let parsed: unknown;
         try { parsed = JSON.parse(line); } catch { continue; }
-        for (const ev of mapClaudeLine(parsed)) {
+        for (const ev of mapLine(parsed)) {
           if (ev.type === 'done' || ev.type === 'error') { finished = true; failed = ev.type === 'error'; }
           yield ev;
         }

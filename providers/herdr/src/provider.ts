@@ -89,8 +89,9 @@ export class HerdrProvider implements IAgentProvider {
     });
 
     const aborted = abortSignalled(signal);
+    let iterator: AsyncIterator<RunnerEvent> | undefined;
     try {
-      const iterator = this.runner
+      iterator = this.runner
         .run({
           prompt,
           cwd,
@@ -156,6 +157,10 @@ export class HerdrProvider implements IAgentProvider {
       failure = this.classifyThrown(error);
     } finally {
       aborted.dispose();
+      // The loop stops pulling at done/error, leaving the runner suspended at its yield; close it
+      // so its finally runs (tab cleanup). On abort it may be mid-tail, so don't wait on it there.
+      const closing = iterator?.return?.(undefined)?.catch(() => undefined);
+      if (!signal.aborted) await closing;
     }
 
     // A tool call the turn did not finish closes as cancelled, before the result.

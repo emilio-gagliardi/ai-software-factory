@@ -11,7 +11,7 @@ export const descriptor = providerPluginDescriptorSchema.parse({
   protocol: 1,
   id: 'herdr',
   displayName: 'Herdr (Claude Code / Pi in visible panes)',
-  version: '0.1.1',
+  version: '0.1.5',
   capabilities: {
     backgroundWork: 'none',
     sessionResume: false,
