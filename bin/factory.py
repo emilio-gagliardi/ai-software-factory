@@ -31,12 +31,12 @@ def main() -> int:
         revision = options.revision or consumer.MANIFEST["integration_revision_required"]
         if revision:
             settings = install_source(options.source or consumer.MANIFEST["repository"],
-                                      revision, options.cache, options.bun)
+                                      revision, options.cache, options.bun, root)
             configure(root, settings)
         else:
             if options.source:
                 raise ValueError("--source requires --revision; moving source refs are not pins")
-            consumer.doctor(consumer.read_settings(root))
+            consumer.doctor(consumer.read_settings(root), root)
         print("Consumer installed and source validated. Shared gates own decisions. Live integration remains required.")
         return 0
     except (ValueError, KeyError, OSError, subprocess.SubprocessError) as error:

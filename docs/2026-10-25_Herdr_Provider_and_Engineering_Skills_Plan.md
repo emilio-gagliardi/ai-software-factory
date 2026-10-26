@@ -123,29 +123,28 @@ visible in a Herdr pane and the run result matches a run on the built-in provide
    agents by the auto-mode classifier).
 4. Scheduling and `archon-loop`: off until supervised laps pass.
 
-## Build status (2026-10-25, all local, nothing committed)
+## Build status (2026-10-26)
 
 | Piece | State | Evidence |
 |---|---|---|
-| `engineering-skills` repo | scaffolded: 6 skills copied, manifest, `sync/sync.py` (dry-run default, refuses to clobber), `gates/` (ruff, pyrefly, openspec, run_gates), `review/` schema + examples | `sync/test_sync.py` and `gates/test_gates.py` pass; sync dry run: 6 CREATE, 6 CONFLICT (originals are real dirs) |
-| Consumer pack entries (S4) | done in `template/factory/consumer.py` (`PACK_PREFIX`, `PACK_DIR`) | `bin/test_consumer.py`: 64 passed, 1 skipped |
-| `providers/herdr` | protocol, descriptor, fake runner, real `HerdrRunner` (Factory workspace, tab per turn, `pane-turn` wrapper, stream-json tail, cancel file, tab cleanup), `scripts/smoke.ts` | `bun test`: 11 pass; `tsc --noEmit` clean. Live smoke NOT run: auto-mode classifier denied launching Claude with bypassPermissions ("Create Unsafe Agents") |
-| `packs/prairie-sdlc` | `prairie-openspec-deliver` (gate-proposal, plan-from-proposal, include archon-deliver) + 2 fixtures; junctioned to `~/.archon/workflows/prairie-sdlc` | validates (bun-on-PATH warnings only) |
+| Fork and `providers/herdr` | committed and pushed on `feat/herdr-provider-and-prairie-pack` (`d02239e`, `0c58e32`, `09f49a2`, `e266ab8`); provider released as fork pre-releases `provider-herdr-v0.1.0` and `provider-herdr-v0.1.1` (`v0.1.1` installed) | Live smoke passed for plain and structured output |
+| `engineering-skills` repo | private GitHub repo `emilio-gagliardi/engineering-skills`, created by user on 2026-10-26; sync applied; `~/.claude/skills` and `~/.agents/skills` are junctions to it | Shared skills resolve from the synced repo |
+| First real factory run | `archon-triage` on issue #114 via Herdr; run `52cb6ff5`, 46.7 s | Verdict accepted by the gate |
+| `packs/prairie-sdlc` fixtures | RESOLVED: `~/.archon/workflows` is a junction to the fork's `packs\` folder, so engine `realpath` sees `prairie-sdlc` as a real directory | Both pack fixtures pass; happy-path needed bare stub id `ci-probe` |
+| Node `skills:` validation | RESOLVED: `consumer.validate` now uses project root for `prairie-*` workflows instead of pinned root, which has no tiers; `large` had resolved to Codex (`skills:false`) | Plan node carries `skills: [openspec-prairieapplied]` again |
+| Live smoke and Windows gate | RESOLVED: live smoke ran with user approval; gate uses `uv run --no-project python` and resolved OpenSpec path | Both blockers closed |
 
 Open issues:
-1. `workflow test` finds no fixtures through the junction: `fixture-runner.ts:222-225` skips symlinked dirs. Options: sync copies instead of a junction, or run fixtures from a project-scope copy.
-2. Node `skills:` fails validation under the factory (pinned-root validate uses the Codex default). Investigate tier/provider resolution in `validator.ts` before relying on `skills:`.
-3. Live provider smoke and first `provider: herdr` run need the user to allow Claude with bypassPermissions in panes, or to run `bun scripts/smoke.ts` themselves.
-4. Gate script calls `python` and `openspec`; confirm interpreter (uv/ps-ops) and `openspec.cmd` on Windows.
-5. Pi runner (`herdr:pi`) not implemented; claude only.
+1. Pi runner (`herdr:pi`) is not implemented.
+2. First real `prairie-openspec-deliver` run to a draft PR is not yet done.
+3. Phase 4 (Chief contract, Port revision fields, scheduling) is in progress.
 
 ## Decisions reserved for the user
 
-- Creating GitHub remotes for `engineering-skills` (local only until then).
-- Committing anything in `software-factory-medin` (fork files remain uncommitted).
-- Persistence (Scheduled Task / startup) for bridge and Herdr.
-- Hermes/Chief changes.
-- Turning on scheduling and any merge automation.
+- GitHub remotes created; fork commits approved and pushed.
+- Persistence approved by user on 2026-10-26 (Scheduled Task).
+- Chief should launch runs (user decision, 2026-10-26).
+- Scheduling and merge automation remain reserved.
 
 ## Work routing
 

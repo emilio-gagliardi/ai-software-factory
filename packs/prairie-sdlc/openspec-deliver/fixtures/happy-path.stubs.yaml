@@ -42,7 +42,8 @@ deliver__review__publish:
   findings_summary: "stub: clean on initial review"
   report: { type: archon_artifact, run_id: "fixture-run", path: "review/report.md" }
 deliver__gate-ready: '{"ready":"true"}'
-deliver__ci-probe: '{"state":"concluded","detail":"no checks configured on this repository - nothing to await"}'
+# ci-probe is read by its bare id (the engine's CI wait resolves it unprefixed); the rest are namespaced.
+ci-probe: '{"state":"concluded","detail":"no checks configured on this repository - nothing to await"}'
 deliver__ci-verdict: '{"state":"concluded","detail":"no checks configured on this repository - nothing to await"}'
 deliver__ci-attention-route: '{"attention":false,"red_cause":""}'
 deliver__flip-ready: { pr_url: "https://github.com/example/repo/pull/2" }

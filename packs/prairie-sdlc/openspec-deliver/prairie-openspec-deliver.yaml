@@ -35,10 +35,10 @@ nodes:
 
   - id: plan
     command: plan-from-proposal
-    # TODO(skills): `skills: [openspec-prairieapplied]` fails validation because the factory
-    # validates from the pinned root, whose default provider is Codex (skills:false), even
-    # with a node-level provider. The skill is named in the prompt instead until resolved.
+    # `large` must resolve to a skills-capable provider (claude or herdr) in the target repo's
+    # tiers; validator.ts takes the provider from the tier, not from a node-level provider.
     model: large
+    skills: [openspec-prairieapplied]
     mutates_checkout: false
     output_type: delivery-plan
     depends_on: [gate-proposal]

@@ -604,19 +604,27 @@ class ConsumerTests(Fixture):
             consumer.verify_source(self.settings)
 
     def test_doctor_missing_workflow_or_command_is_not_ready(self):
-        self.assertEqual(consumer.doctor(self.settings)["revision"], self.revision)
+        self.assertEqual(consumer.doctor(self.settings, self.source)["revision"], self.revision)
         with patch.object(consumer, "discover", return_value={}):
             with self.assertRaisesRegex(ValueError, "missing shared"):
-                consumer.doctor(self.settings)
+                consumer.doctor(self.settings, self.source)
         with patch.object(consumer, "native_json", return_value={"results": [{"valid": False}]}):
             with self.assertRaisesRegex(ValueError, "validation failed"):
-                consumer.validate(self.settings, self.source, "archon-ship")
+                consumer.validate(self.settings, self.source, "archon-ship", self.source)
+
+    def test_pack_workflows_validate_from_project_root(self):
+        project = Path(self.temp.name) / "project"
+        ok = {"results": [{"valid": True}], "summary": {"errors": 0}}
+        with patch.object(consumer, "native_json", return_value=ok) as native:
+            consumer.validate(self.settings, self.source, "prairie-openspec-deliver", project)
+            consumer.validate(self.settings, self.source, "archon-ship", project)
+        self.assertEqual([c.args[3] for c in native.call_args_list], [project, self.source])
 
     def test_capability_probe_refuses_unsupported_cli(self):
         with patch.object(consumer, "checked", return_value="no capabilities"), \
              patch.object(consumer, "verify_source", return_value=self.source):
             with self.assertRaisesRegex(ValueError, "missing workflow"):
-                consumer.doctor(self.settings)
+                consumer.doctor(self.settings, self.source)
 
     def test_source_index_refuses_missing_command_include_and_conflict(self):
         path = next(self.source.rglob("archon-ship.yaml"))
@@ -980,7 +988,7 @@ class InstallTests(Fixture):
         provider_before = provider.read_bytes()
         with patch.dict(os.environ, {"HOME": str(self.base / "home"), "USERPROFILE": str(self.base / "home")}), contextlib.redirect_stdout(io.StringIO()):
             sync(self.app)
-            consumer.doctor(self.settings)
+            consumer.doctor(self.settings, self.source)
         self.assertEqual(provider.read_bytes(), provider_before)
         for rel, data in originals.items():
             self.assertEqual((self.app / rel).read_bytes(), data, rel)
@@ -1014,7 +1022,7 @@ class InstallTests(Fixture):
         sync_mock.assert_called_once_with(self.app)
         install_mock.assert_called_once_with(
             consumer.MANIFEST["repository"], consumer.MANIFEST["integration_revision_required"],
-            Path.home() / ".cache/factory/archon", "bun")
+            Path.home() / ".cache/factory/archon", "bun", self.app)
         configure_mock.assert_called_once_with(self.app, settings)
 
     def test_installer_clones_full_source_and_never_repoints_cache(self):
@@ -1028,13 +1036,13 @@ class InstallTests(Fixture):
                 return "installed"
             return original(argv, cwd, timeout)
         with patch.object(consumer, "checked", side_effect=checked):
-            settings = install_source(str(self.origin), self.revision, cache, sys.executable)
+            settings = install_source(str(self.origin), self.revision, cache, sys.executable, self.origin)
         self.assertEqual(settings["source"], str(cache / self.revision))
         self.assertTrue((Path(settings["source"]) / "package.json").is_file())
         tracked = Path(settings["source"]) / "package.json"
         tracked.write_text("dirty")
         with self.assertRaisesRegex(ValueError, "dirty"):
-            install_source(str(self.origin), self.revision, cache, sys.executable)
+            install_source(str(self.origin), self.revision, cache, sys.executable, self.origin)
         self.assertEqual(tracked.read_text(), "dirty")
 
     def test_dry_upgrade_and_repeat_backup_preserve_bytes(self):

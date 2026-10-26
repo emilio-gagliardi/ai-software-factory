@@ -100,7 +100,7 @@ def sync(root: Path, dry: bool = False) -> None:
     print("Your project files are preserved; changed factory files are backed up in .factory/backup.")
 
 
-def install_source(repository: str, revision: str, cache: Path, bun: str) -> dict:
+def install_source(repository: str, revision: str, cache: Path, bun: str, root: Path) -> dict:
     import re
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("--revision must be a full lowercase commit SHA")
@@ -121,7 +121,7 @@ def install_source(repository: str, revision: str, cache: Path, bun: str) -> dic
         raise ValueError("Existing cache is dirty; it will not be overwritten")
     if not (dest / "node_modules").is_dir():
         consumer.checked([bun, "install", "--frozen-lockfile"], dest, 1800)
-    consumer.doctor(settings)
+    consumer.doctor(settings, root)
     return settings
 
 
