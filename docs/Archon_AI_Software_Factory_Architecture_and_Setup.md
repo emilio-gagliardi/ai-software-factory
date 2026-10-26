@@ -7,6 +7,12 @@ source_pin: 120f3e040f45c0ad88249601d846e414f4bf438b
 
 # Archon: what it does, how it works, and how to set it up
 
+> **2026-10-26, pin ec3791c6:** this note was written against pin 120f3e04. Upstream
+> has since replaced `archon-ship`, `archon-triage`, `archon-deliver` and `archon-review`
+> with `-block` workflows (`archon-ship-block` is the issue-to-PR route) and removed
+> `archon-lifecycle`; `archon-loop` and `archon-manager` are the composed routes. See the
+> README's workflow table for current names.
+
 Parent note: [[medin software factory]]
 
 > [!important] Scope of this note
