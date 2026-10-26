@@ -134,6 +134,58 @@ def test_correlate_ignores_runs_started_more_than_60_seconds_before_request():
     assert s.correlate(req, [too_early], set()) is None
 
 
+def test_correlate_after_own_launch_ignores_runs_started_before_it():
+    req = request()
+    launched = s.parse_time("2026-10-25T00:00:30Z").timestamp()
+    old = archon_run("old", started_at="2026-10-25T00:00:01Z")  # inside the createdAt skew window, before launch
+    new = archon_run("new", started_at="2026-10-25T00:00:31Z")
+    assert s.correlate(req, [old], set(), launched) is None
+    assert s.correlate(req, [old, new], set(), launched) == new
+
+
+class FakePort:
+    def __init__(self, requests):
+        self.requests, self.patches = requests, []
+
+    def active_requests(self):
+        return self.requests
+
+    def patch_run(self, run_id, **fields):
+        self.patches.append((run_id, fields))
+
+    def run_log(self, run_id, message):
+        pass
+
+
+def bridge(port):
+    b = object.__new__(s.Bridge)
+    b.port, b.slug, b.workflows = port, "owner/repo", {"archon-triage"}
+    b.factory = {"identifier": "owner-repo--factory"}
+    b.children, b.published, b.owned = {}, {}, set()
+    b.launched = []
+    b.launch = lambda req: b.launched.append(req["id"])
+    return b
+
+
+def test_bridge_leaves_other_factories_requests_untouched():
+    port = FakePort([request(id="foreign", entity={"identifier": "other-repo--factory"})])
+    b = bridge(port)
+    b.handle_requests([])
+    assert port.patches == [] and b.launched == []
+
+
+def test_bridge_does_not_reuse_a_run_tied_to_a_closed_request():
+    run = archon_run("archon-1", started_at="2026-10-25T00:00:01Z")
+    first = FakePort([request(id="req-1")])
+    b = bridge(first)
+    b.handle_requests([run])
+    assert first.patches[0][0] == "req-1" and "archon-1" in b.owned
+    # req-1 has closed; a new request for the same issue arrives 30 seconds later.
+    b.port = FakePort([request(id="req-2", createdAt="2026-10-25T00:00:30Z")])
+    b.handle_requests([run])
+    assert b.port.patches == [] and b.launched == ["req-2"]
+
+
 def test_linked_archon_id_survives_port_dropping_external_run_id():
     rid = "c7bffd38-6728-47db-bc66-2fee21091d37"
     assert s.linked_archon_id({"statusLabel": f"Archon run {rid}: running"}) == rid
