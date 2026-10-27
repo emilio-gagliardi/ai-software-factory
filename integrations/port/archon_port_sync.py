@@ -307,6 +307,7 @@ class Port:
 
     def login(self):
         client_id, client_secret = port_credentials()
+        self.token = None  # Port rejects a token request that carries the expired bearer.
         status, body = self.call(
             "POST",
             "/v1/auth/access_token",
