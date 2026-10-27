@@ -192,6 +192,36 @@ def test_linked_archon_id_survives_port_dropping_external_run_id():
     assert s.linked_archon_id({"statusLabel": "Launching archon-triage"}) is None
 
 
+def test_login_does_not_send_the_expired_token():
+    sent = []
+
+    class Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"accessToken": "new"}'
+
+    def fake_urlopen(req, timeout):
+        sent.append(req.get_header("Authorization"))
+        return Resp()
+
+    real_open, real_creds = s.urllib.request.urlopen, s.port_credentials
+    s.urllib.request.urlopen, s.port_credentials = fake_urlopen, lambda: ("id", "secret")
+    try:
+        port = s.Port("https://api.port.io")
+        port.token = "expired"
+        port.login()
+    finally:
+        s.urllib.request.urlopen, s.port_credentials = real_open, real_creds
+    assert sent == [None] and port.token == "new"
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_"):
