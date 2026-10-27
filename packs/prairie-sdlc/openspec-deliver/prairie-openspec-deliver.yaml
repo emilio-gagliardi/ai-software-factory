@@ -68,3 +68,20 @@ nodes:
         $gate-proposal.output.proposal_dir. The accepted delivery plan is at
         $ARTIFACTS_DIR/plan.md. Read it in full before editing and keep the
         implementation within its scope. Do not archive the change and do not merge.
+
+        How to build: you are the lead; a Pi swarm in Herdr does the edits. Read
+        C:/Users/emili/.agents/skills/herdr-terminal-mastery/SKILL.md first and
+        follow its delegation steps, except that this run posts nothing to Zulip.
+        Check that HERDR_ENV is 1, then create one tab labelled pi-swarm in the
+        Herdr workspace labelled Factory, with this worktree as its cwd and
+        --no-focus, and start at most three Pi agents in it. Send each agent one
+        packet from the plan's Worker packets section. Each packet names the files
+        that agent alone may edit, the checks it runs, and its own output folder
+        $ARTIFACTS_DIR/workers/<agent>/. Packets never contain secrets, and
+        workers never read .env, commit, push or touch pull requests. Verify each
+        result against its packet and the diff; idle is not done. Re-drive a
+        worker that got it wrong instead of taking its work over. You keep
+        integration, the final checks and every commit and push. A fix of a
+        few lines in a later round you may make yourself. Close the pi-swarm tab
+        before you finish. If Herdr control is unavailable, build it yourself and
+        record "pi-swarm unavailable" with the reason in implementation.md.

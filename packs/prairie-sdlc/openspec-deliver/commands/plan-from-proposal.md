@@ -30,6 +30,7 @@ Write `$ARTIFACTS_DIR/plan.md` with these sections, omitting any that do not app
 - **Scope** — what this change delivers and what it explicitly does not.
 - **Requirements** — each requirement and its scenarios, quoted from the specs.
 - **Tasks in order** — the tasks from `tasks.md`, in dependency order, with the repository files each one touches.
+- **Worker packets** — the implementation is built by at most three Pi agents working in parallel in one checkout. Group the tasks into packets, each with its objective, the files it alone may edit (no file in two packets), the checks it must pass, and which packets must finish first. Keep integration work, and anything touching credentials, for the lead.
 - **Verification** — the tests and checks the change names, and the ones the implementation must add.
 - **Blocking questions** — anything that prevents delivery. If one exists, state it plainly so the run does not proceed on a guess.
 
